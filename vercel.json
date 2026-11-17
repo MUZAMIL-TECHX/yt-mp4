@@ -1,0 +1,6 @@
+{
+  "version": 2,
+  "rewrites": [
+    { "source": "/mp4", "destination": "/api/mp4" }
+  ]
+}
