@@ -1,13 +1,5 @@
 const axios = require('axios');
 
-// Ye Invidious ke public instances hain. Agar ek fail ho, toh doosra try karega.
-const INVIDIOUS_INSTANCES = [
-    'https://inv.nadeko.net',
-    'https://yewtu.be',
-    'https://invidious.nerdvpn.de',
-    'https://vid.puffyan.us'
-];
-
 module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -28,46 +20,38 @@ module.exports = async (req, res) => {
         });
     }
 
-    // YouTube ID nikalein
-    let videoId = '';
-    if (videoUrl.includes('youtu.be/')) {
-        videoId = videoUrl.split('youtu.be/')[1].split('?')[0];
-    } else if (videoUrl.includes('v=')) {
-        videoId = videoUrl.split('v=')[1].split('&')[0];
-    } else {
-        return res.status(400).json({ error: 'Invalid YouTube URL' });
-    }
+    try {
+        // Aapke hi bot wali Vajira API (ytmp4 endpoint)
+        const apiKey = 'VajiraOfc';
+        const apiUrl = `https://vajiraofc-apis.vercel.app/api/ytmp4?apikey=${apiKey}&url=${encodeURIComponent(videoUrl)}`;
 
-    let lastError = 'All instances failed';
-
-    // Har instance ko try karein
-    for (const instance of INVIDIOUS_INSTANCES) {
-        try {
-            const apiUrl = `${instance}/api/v1/videos/${videoId}`;
-            const response = await axios.get(apiUrl, { timeout: 10000 });
-            const data = response.data;
-
-            if (data && data.formatStreams) {
-                // MP4 (Video+Audio) format dhoondein
-                const mp4Format = data.formatStreams.find(f => f.container === 'mp4' && f.resolution !== 'audio');
-                
-                if (mp4Format && mp4Format.url) {
-                    // Direct MP4 link mil gaya! Redirect kar dein
-                    return res.redirect(mp4Format.url);
-                }
+        const response = await axios.get(apiUrl, {
+            timeout: 20000,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
-        } catch (err) {
-            console.log(`Instance ${instance} failed:`, err.message);
-            lastError = err.message;
-        }
-    }
+        });
 
-    // Agar sab fail ho jayein
-    res.status(500).json({
-        creator: 'c9muzamil',
-        contect: '923130122643',
-        team: 'TeamRedXhackers',
-        error: 'Download fail ho gaya.',
-        details: 'Invidious instances failed. Try again later.'
-    });
+        const data = response.data;
+
+        // Check karein ke link mila ya nahi
+        if (data && data.success && data.data && data.data.download && data.data.download.url) {
+            // Direct MP4 link mil gaya! User ko redirect kar dein
+            return res.redirect(data.data.download.url);
+        } 
+        else {
+            throw new Error('API ne direct link nahi diya');
+        }
+
+    } catch (error) {
+        console.error('MP4 API Error:', error.message);
+        
+        res.status(500).json({
+            creator: 'c9muzamil',
+            contect: '923130122643',
+            team: 'TeamRedXhackers',
+            error: 'Download fail ho gaya.',
+            details: error.message
+        });
+    }
 };
