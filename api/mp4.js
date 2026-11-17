@@ -21,11 +21,11 @@ module.exports = async (req, res) => {
     }
 
     try {
-        // Naya Reliable Cobalt Instance
-        const response = await axios.post('https://co.wuk.sh/api/json', {
+        // Naya live instance (Cobalt v10 official API)
+        const response = await axios.post('https://api.cobalt.tools/', {
             url: videoUrl,
-            vQuality: '720',
-            filenamePattern: 'basic'
+            videoQuality: '720', // Naye API mein vQuality ki jagah videoQuality aata hai
+            downloadMode: 'auto'
         }, {
             headers: {
                 'Accept': 'application/json',
@@ -36,27 +36,23 @@ module.exports = async (req, res) => {
 
         const data = response.data;
 
-        if (data && data.status === 'redirect' && data.url) {
-            // Download Link mil gaya, user ko redirect kar do
+        // Status check
+        if (data && (data.status === 'redirect' || data.status === 'tunnel') && data.url) {
             return res.redirect(data.url); 
         } 
-        else if (data && data.status === 'stream' && data.url) {
-            return res.redirect(data.url);
-        } 
         else if (data && data.status === 'picker' && data.picker) {
-            // Agar YouTube multiple formats de raha hai (video/audio)
-            // Toh hum video (mp4) wala link utha lenge
+            // Agar multiple formats aayein toh video (mp4) wala pick karein
             const videoOption = data.picker.find(opt => opt.type === 'video');
             if (videoOption && videoOption.url) {
                 return res.redirect(videoOption.url);
             }
             throw new Error('Video format nahi mila');
         } 
-        else if (data && data.text) {
-            throw new Error(data.text); // Error message Cobalt se
+        else if (data && (data.text || data.error)) {
+            throw new Error(data.text || data.error.code); 
         } 
         else {
-            throw new Error('Koi direct link nahi mila');
+            throw new Error('Koi direct link nahi mila. Cobalt ne reject kar diya.');
         }
 
     } catch (error) {
