@@ -1,4 +1,4 @@
-const axios = require('axios');
+const ytdl = require('@distube/ytdl-core');
 
 module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -21,44 +21,30 @@ module.exports = async (req, res) => {
     }
 
     try {
-        // Naya live instance (Cobalt v10 official API)
-        const response = await axios.post('https://api.cobalt.tools/', {
-            url: videoUrl,
-            videoQuality: '720', // Naye API mein vQuality ki jagah videoQuality aata hai
-            downloadMode: 'auto'
-        }, {
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json'
-            },
-            timeout: 20000 
+        // Check karein ke link valid YouTube link hai ya nahi
+        if (!ytdl.validateURL(videoUrl)) {
+            throw new Error('Invalid YouTube URL');
+        }
+
+        // Video ki details nikalein
+        const info = await ytdl.getInfo(videoUrl);
+
+        // Sabse best MP4 (video + audio) format dhoondein
+        const format = ytdl.chooseFormat(info.formats, { 
+            quality: 'highest', 
+            filter: 'audioandvideo' 
         });
 
-        const data = response.data;
-
-        // Status check
-        if (data && (data.status === 'redirect' || data.status === 'tunnel') && data.url) {
-            return res.redirect(data.url); 
-        } 
-        else if (data && data.status === 'picker' && data.picker) {
-            // Agar multiple formats aayein toh video (mp4) wala pick karein
-            const videoOption = data.picker.find(opt => opt.type === 'video');
-            if (videoOption && videoOption.url) {
-                return res.redirect(videoOption.url);
-            }
-            throw new Error('Video format nahi mila');
-        } 
-        else if (data && (data.text || data.error)) {
-            throw new Error(data.text || data.error.code); 
-        } 
-        else {
-            throw new Error('Koi direct link nahi mila. Cobalt ne reject kar diya.');
+        if (!format || !format.url) {
+            throw new Error('MP4 format nahi mila');
         }
+
+        // Direct MP4 link mil gaya! User ko redirect kar dein
+        return res.redirect(format.url);
 
     } catch (error) {
         console.error('MP4 API Error:', error.message);
         
-        // Agar API fail ho jaye toh proper error bhejein
         res.status(500).json({
             creator: 'c9muzamil',
             contect: '923130122643',
