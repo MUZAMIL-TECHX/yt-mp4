@@ -1,7 +1,6 @@
 const axios = require('axios');
 
 module.exports = async (req, res) => {
-    // CORS Enable
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
 
@@ -11,7 +10,6 @@ module.exports = async (req, res) => {
 
     const videoUrl = req.query.url;
 
-    // Agar URL missing hai
     if (!videoUrl) {
         return res.status(400).json({
             creator: 'c9muzamil',
@@ -23,45 +21,53 @@ module.exports = async (req, res) => {
     }
 
     try {
-        // Cobalt API (v10) ko call kar rahe hain direct MP4 link ke liye
-        const response = await axios.post('https://api.cobalt.tools/', {
+        // Naya Reliable Cobalt Instance
+        const response = await axios.post('https://co.wuk.sh/api/json', {
             url: videoUrl,
-            vQuality: '720', // 720p quality (aap 1080 bhi kar sakte hain)
+            vQuality: '720',
             filenamePattern: 'basic'
         }, {
             headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
             },
-            timeout: 15000 // 15 seconds timeout
+            timeout: 20000 
         });
 
         const data = response.data;
 
-        // Cobalt API ka naya response structure check kar rahe hain
         if (data && data.status === 'redirect' && data.url) {
-            // Direct MP4 Link mil gaya!
-            // Vercel ko bolein ke user ko us link par redirect kar de (Download shuru)
+            // Download Link mil gaya, user ko redirect kar do
             return res.redirect(data.url); 
         } 
-        else if (data && data.status === 'tunnel' && data.url) {
-            // Kabhi kabhi Cobalt tunnel URL deta hai (streaming ke liye)
+        else if (data && data.status === 'stream' && data.url) {
             return res.redirect(data.url);
         } 
-        else if (data && data.status === 'error') {
-            throw new Error(data.error && data.error.code ? data.error.code : 'Cobalt API Error');
+        else if (data && data.status === 'picker' && data.picker) {
+            // Agar YouTube multiple formats de raha hai (video/audio)
+            // Toh hum video (mp4) wala link utha lenge
+            const videoOption = data.picker.find(opt => opt.type === 'video');
+            if (videoOption && videoOption.url) {
+                return res.redirect(videoOption.url);
+            }
+            throw new Error('Video format nahi mila');
+        } 
+        else if (data && data.text) {
+            throw new Error(data.text); // Error message Cobalt se
         } 
         else {
-            throw new Error('Invalid response from Cobalt API');
+            throw new Error('Koi direct link nahi mila');
         }
 
     } catch (error) {
         console.error('MP4 API Error:', error.message);
+        
+        // Agar API fail ho jaye toh proper error bhejein
         res.status(500).json({
             creator: 'c9muzamil',
             contect: '923130122643',
             team: 'TeamRedXhackers',
-            error: 'Download fail ho gaya. Link sahi hai?',
+            error: 'Download fail ho gaya.',
             details: error.message
         });
     }
