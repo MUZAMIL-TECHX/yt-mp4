@@ -1,4 +1,12 @@
-const ytdl = require('@distube/ytdl-core');
+const axios = require('axios');
+
+// Ye Invidious ke public instances hain. Agar ek fail ho, toh doosra try karega.
+const INVIDIOUS_INSTANCES = [
+    'https://inv.nadeko.net',
+    'https://yewtu.be',
+    'https://invidious.nerdvpn.de',
+    'https://vid.puffyan.us'
+];
 
 module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -20,37 +28,46 @@ module.exports = async (req, res) => {
         });
     }
 
-    try {
-        // Check karein ke link valid YouTube link hai ya nahi
-        if (!ytdl.validateURL(videoUrl)) {
-            throw new Error('Invalid YouTube URL');
-        }
-
-        // Video ki details nikalein
-        const info = await ytdl.getInfo(videoUrl);
-
-        // Sabse best MP4 (video + audio) format dhoondein
-        const format = ytdl.chooseFormat(info.formats, { 
-            quality: 'highest', 
-            filter: 'audioandvideo' 
-        });
-
-        if (!format || !format.url) {
-            throw new Error('MP4 format nahi mila');
-        }
-
-        // Direct MP4 link mil gaya! User ko redirect kar dein
-        return res.redirect(format.url);
-
-    } catch (error) {
-        console.error('MP4 API Error:', error.message);
-        
-        res.status(500).json({
-            creator: 'c9muzamil',
-            contect: '923130122643',
-            team: 'TeamRedXhackers',
-            error: 'Download fail ho gaya.',
-            details: error.message
-        });
+    // YouTube ID nikalein
+    let videoId = '';
+    if (videoUrl.includes('youtu.be/')) {
+        videoId = videoUrl.split('youtu.be/')[1].split('?')[0];
+    } else if (videoUrl.includes('v=')) {
+        videoId = videoUrl.split('v=')[1].split('&')[0];
+    } else {
+        return res.status(400).json({ error: 'Invalid YouTube URL' });
     }
+
+    let lastError = 'All instances failed';
+
+    // Har instance ko try karein
+    for (const instance of INVIDIOUS_INSTANCES) {
+        try {
+            const apiUrl = `${instance}/api/v1/videos/${videoId}`;
+            const response = await axios.get(apiUrl, { timeout: 10000 });
+            const data = response.data;
+
+            if (data && data.formatStreams) {
+                // MP4 (Video+Audio) format dhoondein
+                const mp4Format = data.formatStreams.find(f => f.container === 'mp4' && f.resolution !== 'audio');
+                
+                if (mp4Format && mp4Format.url) {
+                    // Direct MP4 link mil gaya! Redirect kar dein
+                    return res.redirect(mp4Format.url);
+                }
+            }
+        } catch (err) {
+            console.log(`Instance ${instance} failed:`, err.message);
+            lastError = err.message;
+        }
+    }
+
+    // Agar sab fail ho jayein
+    res.status(500).json({
+        creator: 'c9muzamil',
+        contect: '923130122643',
+        team: 'TeamRedXhackers',
+        error: 'Download fail ho gaya.',
+        details: 'Invidious instances failed. Try again later.'
+    });
 };
